@@ -199,7 +199,7 @@ resource "aws_autoscaling_schedule" "schedule_out_during_business_hours" {
     max_size = 10
     desired_capacity = 10
     recurrence = "0 9 * * *"
-    autoscaling_group_name = module.webserver_cluster.asg_name
+    autoscaling_group_name = aws_autoscaling_group.example.name
 }
 
 resource "aws_autoscaling_schedule" "scale_in_at_night" {
@@ -210,5 +210,5 @@ resource "aws_autoscaling_schedule" "scale_in_at_night" {
     max_size = 10
     desired_capacity = 2
     recurrence = "0 17 * * *"
-    autoscaling_group_name = module.webserver_cluster.asg_name
+    autoscaling_group_name = aws.autoscaling_group.example.name
 }
