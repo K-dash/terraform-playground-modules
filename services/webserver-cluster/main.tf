@@ -20,7 +20,7 @@ data "terraform_remote_state" "db" {
 
 # 起動設定
 resource "aws_launch_configuration" "example" {
-    image_id = "ami-0fb653ca2d3203ac1"
+    image_id = var.ami
     instance_type = var.instance_type
     security_groups = [aws_security_group.instance.id]
     
@@ -29,6 +29,7 @@ resource "aws_launch_configuration" "example" {
         server_port = var.server_port
         db_address = data.terraform_remote_state.db.outputs.address
         db_port = data.terraform_remote_state.db.outputs.port
+        server_text = var.server_text
     })
 
     # Autoscaling Groupの起動設定の場合は必須
@@ -50,6 +51,9 @@ resource "aws_security_group" "instance" {
 
 
 resource "aws_autoscaling_group" "example" {
+    # 起動設定の名前に明示的に依存させることで、起動設定が置き換えられたらASGも更新させる
+    name = "${var.cluster_name}-${aws_launch_configuration.example.name}"
+
     launch_configuration = aws_launch_configuration.example.name
     vpc_zone_identifier = data.aws_subnets.default.ids
     
@@ -59,6 +63,14 @@ resource "aws_autoscaling_group" "example" {
     min_size = var.min_size
     max_size = var.max_size
     
+    # ASGデプロイが完了すると判断する前に、最低でも指定した数のインスタンスがヘルスチェックをパスするのを待つ
+    min_elb_capacity = var.min_size
+
+    # ASGを置き換える時、置き換え先を先に作成してから元のASGを削除
+    lifecycle {
+        create_before_destroy = true
+    }
+
     tag {
         key = "Name"
         value = var.cluster_name
@@ -66,7 +78,11 @@ resource "aws_autoscaling_group" "example" {
     }
     
     dynamic "tag" {
-        for_each = var.custom_tags
+        for_each = {
+            for key, value in var.custom_tags:
+            key => upper(value)
+            if key != "Name"
+        }
         content {
             key = tag.key
             value = tag.value
@@ -172,4 +188,27 @@ resource "aws_lb_listener_rule" "asg" {
         type = "forward"
         target_group_arn = aws_lb_target_group.asg.arn
     }
+}
+
+# Autoscaling Schedule
+resource "aws_autoscaling_schedule" "schedule_out_during_business_hours" {
+    count = var.enable_auto_scaling ? 1 : 0
+
+    scheduled_action_name = "scale_out_during_business_hours"
+    min_size = 2
+    max_size = 10
+    desired_capacity = 10
+    recurrence = "0 9 * * *"
+    autoscaling_group_name = module.webserver_cluster.asg_name
+}
+
+resource "aws_autoscaling_schedule" "scale_in_at_night" {
+    count = var.enable_auto_scaling ? 1 : 0
+
+    scheduled_action_name = "scale_in_at_night"
+    min_size = 2
+    max_size = 10
+    desired_capacity = 2
+    recurrence = "0 17 * * *"
+    autoscaling_group_name = module.webserver_cluster.asg_name
 }
