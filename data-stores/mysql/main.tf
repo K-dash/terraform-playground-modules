@@ -19,9 +19,9 @@ resource "aws_db_instance" "example" {
     # 設定されている時はこのデータベースはレプリカ
     replicate_source_db = var.replication_source_db
 
-    # replicate_source_db が指定されていない場合のみこれらのパラメータを設定する
+    # replication_source_db が指定されていない場合のみこれらのパラメータを設定する
     engine =  var.replication_source_db == null ? "mysql" : null
-    db_name = var.backup_retention_period == null ? var.db_name : null
-    username = var.backup_retention_period == null ? var.db_username : null
-    password = var.backup_retention_period == null ? var.db_password : null
+    db_name = var.replication_source_db == null ? var.db_name : null
+    username = var.replication_source_db == null ? var.db_username : null
+    password = var.replication_source_db == null ? var.db_password : null
 }
